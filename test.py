@@ -1,36 +1,44 @@
-import numpy as np
 import unittest
+import numpy as np
 from model import XGCalculator
+from utils import FieldProcessor
 
-class TestXGCalculator(unittest.TestCase):
-
+class TestXGSystem(unittest.TestCase):
     def setUp(self):
-        # Inisialisasi objek XGCalculator sebelum setiap tes
-        self.calculator = XGCalculator()
+        self.xg_calc = XGCalculator()
+        self.processor = FieldProcessor()
 
-    def test_calculate_base_xg(self):
-        # Input: jarak = 11 meter (penalti), sudut = 0 radian (lurus ke gawang)
-        distance = 11
-        angle = 0
-        expected_xg = 1 / (1 + np.exp(-(2.0 + (-0.15 * distance) + (1.2 * angle))))
-        result = self.calculator.calculate_base_xg(distance, angle)
-        self.assertAlmostEqual(result, expected_xg, places=5, msg="Base xG tidak sesuai untuk penalti")
+    def test_base_xg(self):
+        xg_close = self.xg_calc.calculate_base_xg(10, 0.5)
+        xg_far = self.xg_calc.calculate_base_xg(30, 0.5)
+        self.assertGreater(xg_close, xg_far)
+        xg_wide = self.xg_calc.calculate_base_xg(15, 1.0)
+        xg_narrow = self.xg_calc.calculate_base_xg(15, 0.1)
+        self.assertGreater(xg_wide, xg_narrow)
 
-    def test_calculate_final_xg_no_defenders(self):
-        # Input: jarak = 16 meter, sudut = 0.5 radian, tanpa penghalang
-        distance = 16
-        angle = 0.5
-        defenders = []
-        result = self.calculator.calculate_final_xg(distance, angle, defenders)
-        self.assertAlmostEqual(result['final_xg'], result['base_xg'], places=5, msg="xG akhir tanpa penghalang tidak sesuai")
+    def test_obstacle_factor_standard(self):
+        factor = self.xg_calc._calculate_obstacle_factor(20, 0.5, [])
+        self.assertEqual(factor, 1.0)
+        defenders = [(5, 0)]
+        factor_blocked = self.xg_calc._calculate_obstacle_factor(20, 0.5, defenders)
+        self.assertLess(factor_blocked, 1.0)
+        defenders_far = [(5, 10)]
+        factor_clear = self.xg_calc._calculate_obstacle_factor(20, 0.5, defenders_far)
+        self.assertGreater(factor_clear, factor_blocked)
 
-    def test_calculate_final_xg_with_defenders(self):
-        # Input: jarak = 20 meter, sudut = 0.3 radian, dengan penghalang di posisi tertentu
-        distance = 20
-        angle = 0.3
-        defenders = [(10, 1), (15, -0.5)] # Penghalang di jarak 10m dan 15m dengan offset lateral
-        result = self.calculator.calculate_final_xg(distance, angle, defenders)
-        self.assertLess(result['final_xg'], result['base_xg'], msg="xG akhir dengan penghalang tidak sesuai")
+    def test_obstacle_factor_eigenvalue(self):
+        wall = [(5, -1), (5, 0), (5, 1)]
+        line = [(4, 0), (5, 0), (6, 0)]
+        factor_wall = self.xg_calc._calculate_obstacle_factor_with_eigenvalue(20, 0.5, wall)
+        factor_line = self.xg_calc._calculate_obstacle_factor_with_eigenvalue(20, 0.5, line)
+        self.assertLess(factor_wall, factor_line)
+
+    def test_homography_transform(self):
+        src = [[0,0], [10,0], [0,10], [10,10]]
+        dst = [[0,0], [10,0], [0,10], [10,10]]
+        H = self.processor.compute_homography(src, dst)
+        pt = self.processor.transform_points([(5,5)], H)[0]
+        np.testing.assert_array_almost_equal(pt, [5,5])
 
 if __name__ == '__main__':
     unittest.main()
