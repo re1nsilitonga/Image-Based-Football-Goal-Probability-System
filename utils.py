@@ -139,11 +139,11 @@ class ImageMarker:
         cv2.destroyAllWindows()
         return self.points
 
-def draw_visualizations(image, points, xg_value):
+def draw_visualizations(image, points, goal_probability):
     """
-    Menggambar visualisasi xG pada gambar.
+    Menggambar visualisasi Probabilitas Gol pada gambar.
     points: dict dari point_name -> (x, y)
-    xg_value: float (0.0 hingga 1.0)
+    goal_probability: float (0.0 hingga 1.0)
     """
     img = image.copy()
     
@@ -184,8 +184,7 @@ def draw_visualizations(image, points, xg_value):
             cv2.line(img, ball, gtr, COLOR_YELLOW, 1)
 
     # 4. Gambar Teks Overlay
-    # "Probabilitas Gol: XX.X%"
-    text = f"Probabilitas Gol: {xg_value * 100:.1f}%"
+    text = f"Probabilitas Gol: {goal_probability * 100:.1f}%"
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 1.0 # Sedikit lebih besar
     thickness = 2
