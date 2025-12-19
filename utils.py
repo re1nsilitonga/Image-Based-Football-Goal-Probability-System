@@ -143,11 +143,6 @@ class ImageMarker:
         return self.points
 
 def draw_visualizations(image, points, xg_value):
-    """
-    Draws the xG visualization on the image.
-    points: dict of point_name -> (x, y)
-    xg_value: float (0.0 to 1.0)
-    """
     img = image.copy()
     
     # Colors (BGR)
@@ -156,39 +151,37 @@ def draw_visualizations(image, points, xg_value):
     COLOR_GREEN = (0, 255, 0)
     COLOR_BLACK = (0, 0, 0)
     
-    # 1. Draw Goal Structure (if points exist)
-    # Required: Goal Top-Left, Goal Top-Right, Goal Bottom-Right, Goal Bottom-Left
-    required_goal = ["Goal Top-Left", "Goal Top-Right", "Goal Bottom-Right", "Goal Bottom-Left"]
-    if all(k in points for k in required_goal):
+    gtl = None; gtr = None; gbl = None; gbr = None
+    if all(k in points for k in ["Tiang Atas-Kiri", "Tiang Atas-Kanan", "Tiang Bawah-Kiri", "Tiang Bawah-Kanan"]):
+        gtl = points["Tiang Atas-Kiri"]
+        gtr = points["Tiang Atas-Kanan"]
+        gbl = points["Tiang Bawah-Kiri"]
+        gbr = points["Tiang Bawah-Kanan"]
+    elif all(k in points for k in ["Goal Top-Left", "Goal Top-Right", "Goal Bottom-Left", "Goal Bottom-Right"]):
         gtl = points["Goal Top-Left"]
         gtr = points["Goal Top-Right"]
-        gbr = points["Goal Bottom-Right"]
         gbl = points["Goal Bottom-Left"]
-        
-        # Draw Goal Box
+        gbr = points["Goal Bottom-Right"]
+
+    ball_key = "Bola" if "Bola" in points else ("Ball" if "Ball" in points else None)
+    ball = points[ball_key] if ball_key else None
+
+    if gtl and gtr and gbl and gbr:
         cv2.line(img, gtl, gtr, COLOR_PINK, 2)
         cv2.line(img, gtr, gbr, COLOR_PINK, 2)
         cv2.line(img, gbr, gbl, COLOR_PINK, 2)
         cv2.line(img, gbl, gtl, COLOR_PINK, 2)
-        
-        # 2. Draw Triangle/Cone from Ball
-        if "Ball" in points:
-            ball = points["Ball"]
-            cv2.line(img, ball, gbl, COLOR_PINK, 2)
-            cv2.line(img, ball, gbr, COLOR_PINK, 2)
-            
-            # 3. Draw Trajectory (Yellow lines to corners or center)
-            # Center of goal
+
+        if ball:
+            cv2.line(img, ball, gtl, COLOR_YELLOW, 2)
+            cv2.line(img, ball, gtr, COLOR_YELLOW, 2)
+            cv2.line(img, ball, gbr, COLOR_YELLOW, 2)
+            cv2.line(img, ball, gbl, COLOR_YELLOW, 2)
             goal_center = ((gtl[0] + gbr[0]) // 2, (gtl[1] + gbr[1]) // 2)
             cv2.line(img, ball, goal_center, COLOR_YELLOW, 2)
-            
-            # Optional: Lines to top corners for "cone" effect
-            cv2.line(img, ball, gtl, COLOR_YELLOW, 1)
-            cv2.line(img, ball, gtr, COLOR_YELLOW, 1)
 
     # 4. Draw Overlay Text
-    # "Goal Probability: XX.X%"
-    text = f"Goal Probability: {xg_value * 100:.1f}%"
+    text = f"Probabilitas Gol: {xg_value * 100:.1f}%"
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 1.0 # Slightly larger
     thickness = 2
