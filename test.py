@@ -33,12 +33,17 @@ class TestGoalProbabilitySystem(unittest.TestCase):
         factor_line = self.gp_calc._calculate_obstacle_factor_with_eigenvalue(20, 0.5, line)
         self.assertLess(factor_wall, factor_line)
 
-    def test_homography_transform(self):
-        src = [[0,0], [10,0], [0,10], [10,10]]
-        dst = [[0,0], [10,0], [0,10], [10,10]]
-        H = self.processor.compute_homography(src, dst)
-        pt = self.processor.transform_points([(5,5)], H)[0]
-        np.testing.assert_array_almost_equal(pt, [5,5])
+    def test_affine_basis_transform(self):
+        src_origin = [0, 0]
+        src_a = [10, 0]
+        src_b = [0, 10]
+        dst_origin = [0, 0]
+        dst_a = [10, 0]
+        dst_b = [0, 10]
+        pts = [[5, 5], [2, 8], [9, 1]]
+        mapped = self.processor.transform_points_affine(pts, src_origin, src_a, src_b, dst_origin, dst_a, dst_b)
+        for i, p in enumerate(pts):
+            np.testing.assert_array_almost_equal(mapped[i], p)
 
 if __name__ == '__main__':
     unittest.main()

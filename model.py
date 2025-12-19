@@ -110,7 +110,7 @@ class GoalProbabilityCalculator:
         try:
             eigenvalues, eigenvectors = self._calculate_eigen_manual_2x2(cov_matrix)
             if len(eigenvalues) == 0:
-                 eigenvalues, eigenvectors = np.linalg.eig(cov_matrix) # Cadangan
+                 eigenvalues, eigenvectors = np.linalg.eig(cov_matrix)
         except:
             return self._calculate_obstacle_factor(distance, angle, defenders)
             

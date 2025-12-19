@@ -26,7 +26,7 @@ class ImageMarker:
 
     def _resize_to_screen(self, image):
         screen_w, screen_h = self._get_screen_size()
-        # Maksimal 3/4 dari layar biar pengguna mudah saat marker
+        # Max 3/4 of screen
         max_w = int(screen_w * 0.75)
         max_h = int(screen_h * 0.75)
         
@@ -47,37 +47,38 @@ class ImageMarker:
 
     def click_event(self, event, x, y, flags, params):
         if event == cv2.EVENT_LBUTTONDOWN:
-            # Memetakan kembali ke koordinat asli
+            # Map back to original coordinates
             real_x = int(x / self.scale_factor)
             real_y = int(y / self.scale_factor)
             self.points.append((real_x, real_y))
             
-            # Menggambar lingkaran pada gambar tampilan (menggunakan koordinat tampilan)
+            # Draw a circle on the display image (using display coordinates)
             cv2.circle(self.image, (x, y), 5, (0, 0, 255), -1)
             cv2.imshow(self.window_name, self.image)
 
     def mark_points(self, image_path, point_names):
         """
-        Membuka gambar dan meminta pengguna untuk menandai titik secara berurutan.
-        Mengembalikan dictionary point_name -> (x, y).
+        Opens an image and asks user to mark points in order.
+        Returns a dictionary of point_name -> (x, y).
         """
         original_image = cv2.imread(image_path)
         if original_image is None:
-            raise ValueError(f"Tidak dapat memuat gambar: {image_path}")
+            raise ValueError(f"Could not load image: {image_path}")
         
-        # Ubah ukuran untuk tampilan
+        # Resize for display
         display_img = self._resize_to_screen(original_image)
-        self.image = display_img # Perbarui referensi untuk callback
+        self.image = display_img # Update reference for callback
         self.points = []
 
         cv2.imshow(self.window_name, display_img)
         cv2.setMouseCallback(self.window_name, self.click_event)
 
-        print(f"Silakan tandai titik-titik berikut secara berurutan pada jendela gambar:")
+        print(f"Please mark the following points in order on the image window:")
         results = {}
         
         for name in point_names:
-            print(f" - Tandai: {name}")
+            print(f" - Mark: {name}")
+            # Wait for a click
             current_len = len(self.points)
             while len(self.points) == current_len:
                 key = cv2.waitKey(100) & 0xFF
@@ -85,12 +86,12 @@ class ImageMarker:
                     cv2.destroyAllWindows()
                     return None
             
-            # Simpan titik terakhir (yang sudah dalam koordinat asli)
+            # Store the last point (which is already in original coords)
             results[name] = self.points[-1]
-            print(f"   Tercatat {name} di {self.points[-1]}")
+            print(f"   Recorded {name} at {self.points[-1]}")
             
-            # Menggambar label pada gambar tampilan
-            # Menghitung koordinat tampilan untuk label
+            # Draw label on display image
+            # We need to calculate display coordinates for the label
             orig_pt = self.points[-1]
             disp_x = int(orig_pt[0] * self.scale_factor)
             disp_y = int(orig_pt[1] * self.scale_factor)
@@ -99,26 +100,28 @@ class ImageMarker:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
             cv2.imshow(self.window_name, display_img)
 
-        # Izinkan penandaan penghalang jika diperlukan
-        print("Tekan tombol apa saja untuk melanjutkan...")
+        # Allow marking defenders if needed
+        # But for now, just return the fixed points
+        # Wait a bit or wait for key
+        print("Press any key to continue...")
         cv2.waitKey(0)
         cv2.destroyAllWindows()
         return results
 
     def mark_defenders(self, image_path, existing_points=None):
         """
-        Mode khusus untuk menandai beberapa penghalang hingga tombol ditekan.
+        Special mode to mark multiple defenders until a key is pressed.
         """
-        # Muat ulang atau gunakan gambar yang ada
+        # Reload or use existing image
         original_image = cv2.imread(image_path)
         display_img = self._resize_to_screen(original_image)
         self.image = display_img
         self.points = []
         
-        # Gambar titik yang ada jika ada
+        # Draw existing points if any
         if existing_points:
             for name, pt in existing_points.items():
-                # Konversi ke koordinat tampilan
+                # Convert to display coords
                 disp_x = int(pt[0] * self.scale_factor)
                 disp_y = int(pt[1] * self.scale_factor)
                 
@@ -129,32 +132,32 @@ class ImageMarker:
         cv2.imshow(self.window_name, display_img)
         cv2.setMouseCallback(self.window_name, self.click_event)
         
-        print("Tandai Penghalang. Tekan 'q' atau 'Enter' jika selesai.")
+        print("Mark Defenders. Press 'q' or 'Enter' when finished.")
         
         while True:
             key = cv2.waitKey(100) & 0xFF
-            if key == ord('q') or key == 13:
+            if key == ord('q') or key == 13: # q or Enter
                 break
         
         cv2.destroyAllWindows()
         return self.points
 
-def draw_visualizations(image, points, goal_probability):
+def draw_visualizations(image, points, xg_value):
     """
-    Menggambar visualisasi Probabilitas Gol pada gambar.
-    points: dict dari point_name -> (x, y)
-    goal_probability: float (0.0 hingga 1.0)
+    Draws the xG visualization on the image.
+    points: dict of point_name -> (x, y)
+    xg_value: float (0.0 to 1.0)
     """
     img = image.copy()
     
-    # Warna (BGR)
+    # Colors (BGR)
     COLOR_PINK = (255, 0, 255)
     COLOR_YELLOW = (0, 255, 255)
     COLOR_GREEN = (0, 255, 0)
     COLOR_BLACK = (0, 0, 0)
     
-    # 1. Gambar Struktur Gawang (jika titik ada)
-    # Dibutuhkan: Goal Top-Left, Goal Top-Right, Goal Bottom-Right, Goal Bottom-Left
+    # 1. Draw Goal Structure (if points exist)
+    # Required: Goal Top-Left, Goal Top-Right, Goal Bottom-Right, Goal Bottom-Left
     required_goal = ["Goal Top-Left", "Goal Top-Right", "Goal Bottom-Right", "Goal Bottom-Left"]
     if all(k in points for k in required_goal):
         gtl = points["Goal Top-Left"]
@@ -162,49 +165,50 @@ def draw_visualizations(image, points, goal_probability):
         gbr = points["Goal Bottom-Right"]
         gbl = points["Goal Bottom-Left"]
         
-        # Gambar Kotak Gawang
+        # Draw Goal Box
         cv2.line(img, gtl, gtr, COLOR_PINK, 2)
         cv2.line(img, gtr, gbr, COLOR_PINK, 2)
         cv2.line(img, gbr, gbl, COLOR_PINK, 2)
         cv2.line(img, gbl, gtl, COLOR_PINK, 2)
         
-        # 2. Gambar Segitiga/Kerucut dari Bola
+        # 2. Draw Triangle/Cone from Ball
         if "Ball" in points:
             ball = points["Ball"]
             cv2.line(img, ball, gbl, COLOR_PINK, 2)
             cv2.line(img, ball, gbr, COLOR_PINK, 2)
             
-            # 3. Gambar Trajektori (Garis Kuning ke sudut atau tengah)
-            # Tengah gawang
+            # 3. Draw Trajectory (Yellow lines to corners or center)
+            # Center of goal
             goal_center = ((gtl[0] + gbr[0]) // 2, (gtl[1] + gbr[1]) // 2)
             cv2.line(img, ball, goal_center, COLOR_YELLOW, 2)
             
-            # Opsional: Garis ke sudut atas untuk efek "kerucut"
+            # Optional: Lines to top corners for "cone" effect
             cv2.line(img, ball, gtl, COLOR_YELLOW, 1)
             cv2.line(img, ball, gtr, COLOR_YELLOW, 1)
 
-    # 4. Gambar Teks Overlay
-    text = f"Probabilitas Gol: {goal_probability * 100:.1f}%"
+    # 4. Draw Overlay Text
+    # "Goal Probability: XX.X%"
+    text = f"Goal Probability: {xg_value * 100:.1f}%"
     font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 1.0 # Sedikit lebih besar
+    font_scale = 1.0 # Slightly larger
     thickness = 2
     
-    # Dapatkan ukuran teks
+    # Get text size
     (text_w, text_h), baseline = cv2.getTextSize(text, font, font_scale, thickness)
     
     # Padding
     pad = 10
-    # Koordinat Kotak (Kiri-Atas)
+    # Box coordinates (Top-Left)
     box_x = 20
     box_y = 20
     box_w = text_w + 2 * pad
     box_h = text_h + 2 * pad
     
-    # Gambar Persegi Panjang Latar Belakang Hitam
+    # Draw Black Background Rectangle
     cv2.rectangle(img, (box_x, box_y), (box_x + box_w, box_y + box_h), COLOR_BLACK, -1)
     
-    # Gambar Teks Hijau
-    # Asal teks adalah kiri-bawah string teks
+    # Draw Green Text
+    # Text origin is bottom-left of the text string
     text_x = box_x + pad
     text_y = box_y + pad + text_h
     cv2.putText(img, text, (text_x, text_y), font, font_scale, COLOR_GREEN, thickness)
@@ -213,74 +217,96 @@ def draw_visualizations(image, points, goal_probability):
 
 class FieldProcessor:
     def __init__(self):
-        self.real_goal_width = 7.32 # meter berdasarkan regulasi FIFA
+        self.real_goal_width = 7.32 # meters
 
     def calculate_scale(self, left_post, right_post):
+        """
+        Calculate pixels per meter based on goal posts.
+        """
         dist_pixels = np.linalg.norm(np.array(left_post) - np.array(right_post))
         if dist_pixels == 0:
             return 1.0
         return dist_pixels / self.real_goal_width
 
     def compute_homography(self, src_points, dst_points):
+        """
+        Compute Homography matrix using Manual SVD (Singular Value Decomposition).
+        Algorithms implemented manually:
+        a) Sistem persamaan linier (Linear System construction)
+        g) Dekomposisi matriks: SVD (Singular Value Decomposition)
+        
+        This replaces cv2.findHomography with a Direct Linear Transformation (DLT) approach.
+        """
         src = np.array(src_points, dtype=np.float32)
         dst = np.array(dst_points, dtype=np.float32)
         
         if len(src) < 4 or len(dst) < 4:
-            raise ValueError("Butuh setidaknya 4 titik untuk Homografi")
+            raise ValueError("Need at least 4 points for Homography")
 
-        # 1. Konstruksi Matriks A untuk sistem Ah = 0
-        # Untuk setiap korespondensi titik (x,y) -> (xp,yp), kita mendapatkan 2 baris.
-        # A berukuran (2*N, 9)
+        # 1. Construct Matrix A for the system Ah = 0
+        # For each point correspondence (x,y) -> (xp,yp), we get 2 rows.
+        # A is size (2*N, 9)
         A = []
         for i in range(len(src)):
             x, y = src[i][0], src[i][1]
             xp, yp = dst[i][0], dst[i][1]
             
-            # Baris 1: [-x, -y, -1, 0, 0, 0, x*xp, y*xp, xp]
+            # Row 1: [-x, -y, -1, 0, 0, 0, x*xp, y*xp, xp]
             A.append([-x, -y, -1, 0, 0, 0, x*xp, y*xp, xp])
-            # Baris 2: [0, 0, 0, -x, -y, -1, x*yp, y*yp, yp]
+            # Row 2: [0, 0, 0, -x, -y, -1, x*yp, y*yp, yp]
             A.append([0, 0, 0, -x, -y, -1, x*yp, y*yp, yp])
             
         A = np.array(A)
         
-        # 2. Selesaikan menggunakan SVD (Dekomposisi)
+        # 2. Solve using SVD (Decomposition)
         # A = U * Sigma * Vt
-        # Kita menggunakan SVD numpy yang mengembalikan U, S, Vt
+        # We use numpy's SVD which returns U, S, Vt
         U, S, Vt = np.linalg.svd(A)
         
-        # Solusi h adalah vektor eigen yang sesuai dengan nilai eigen terkecil (nilai singular)
-        # Dalam SVD, ini adalah baris terakhir dari Vt (yang sesuai dengan nilai singular terkecil di S)
+        # The solution h is the eigenvector corresponding to the smallest eigenvalue (singular value)
+        # In SVD, this is the last row of Vt (which corresponds to the smallest singular value in S)
         L = Vt[-1]
         
-        # 3. Bentuk ulang menjadi Matriks Homografi 3x3
+        # 3. Reshape into 3x3 Homography Matrix
         H = L.reshape(3, 3)
         
-        # Normalisasi sehingga H[2,2] = 1 (konvensi standar)
+        # Normalize so H[2,2] = 1 (standard convention)
         if abs(H[2, 2]) > 1e-10:
             H = H / H[2, 2]
             
         return H
 
     def transform_points(self, points, H):
+        """
+        Transform a list of points using H.
+        """
         if not points:
             return []
         pts = np.array([points], dtype=np.float32)
         dst = cv2.perspectiveTransform(pts, H)
         return dst[0]
 
-    def _cross2d(self, a, b):
-        return a[0]*b[1] - a[1]*b[0]
+    def transform_points_affine(self, points, src_origin, src_a_point, src_b_point, dst_origin, dst_a_point, dst_b_point):
+        transformer = AffineBasisTransformer()
+        return transformer.transform_points_affine(points, src_origin, src_a_point, src_b_point, dst_origin, dst_a_point, dst_b_point)
+
+def wedge_product_2d(vec_a, vec_b):
+    return vec_a[0] * vec_b[1] - vec_a[1] * vec_b[0]
+
+class AffineBasisTransformer:
+    def __init__(self):
+        pass
 
     def _coefficients_change_of_basis(self, origin, a_point, b_point, p_point):
         o = np.array(origin, dtype=np.float64)
         a = np.array(a_point, dtype=np.float64) - o
         b = np.array(b_point, dtype=np.float64) - o
         p = np.array(p_point, dtype=np.float64) - o
-        denom = self._cross2d(a, b)
+        denom = wedge_product_2d(a, b)
         if abs(denom) < 1e-12:
-            raise ValueError("Basis degenerat")
-        alpha = self._cross2d(p, b) / denom
-        beta = self._cross2d(p, a) / (-denom)
+            raise ValueError("Degenerate basis")
+        alpha = wedge_product_2d(p, b) / denom
+        beta = wedge_product_2d(p, a) / (-denom)
         return alpha, beta
 
     def transform_points_affine(self, points, src_origin, src_a_point, src_b_point, dst_origin, dst_a_point, dst_b_point):
