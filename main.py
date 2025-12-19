@@ -96,68 +96,56 @@ def main():
     print(f"Jarak Ground Truth: {dist_meters:.2f} meter")
     print(f"Sudut Ground Truth: {np.degrees(angle_rad):.2f} derajat")
     
-    # Langkah 5: Homografi & Pemetaan Pemain Bertahan
-    # Menghitung homografi antara gambar tembakan dan gambar lapangan
-    src_pts = [
-        shot_points["Bola"],
-        shot_points["Kiper"],
-        shot_points["Tiang Bawah-Kiri"],
-        shot_points["Tiang Bawah-Kanan"]
-    ]
-    
-    dst_pts = [
-        field_points["Bola"],
-        field_points["Kiper"],
-        field_points["Tiang Kiri"],
-        field_points["Tiang Kanan"]
-    ]
-    
-    H = processor.compute_homography(src_pts, dst_pts)
-    
-    # Transformasi posisi pemain bertahan ke koordinat lapangan
-    defenders_field = processor.transform_points(defender_points_shot, H)
+    # Langkah 5: Pemetaan Pemain Bertahan dengan Perubahan Basis Afine
+    shot_origin = shot_points["Tiang Bawah-Kiri"]
+    shot_a_point = shot_points["Tiang Bawah-Kanan"]
+    shot_b_point = shot_points["Bola"]
+    field_origin = field_points["Tiang Kiri"]
+    field_a_point = field_points["Tiang Kanan"]
+    field_b_point = field_points["Bola"]
+    defenders_field = processor.transform_points_affine(
+        defender_points_shot,
+        shot_origin, shot_a_point, shot_b_point,
+        field_origin, field_a_point, field_b_point
+    )
     
     # Mengonversi posisi pemain bertahan ke koordinat relatif (meter relatif terhadap bola)
     direction_vector = goal_center_field - ball_field
     dir_norm = np.linalg.norm(direction_vector)
     
     if dir_norm == 0:
-        rotation_matrix = np.eye(2)
+        a_unit = np.array([1.0, 0.0])
     else:
-        # Sudut lintasan tembakan dalam koordinat lapangan
-        shot_angle_field = np.arctan2(direction_vector[1], direction_vector[0])
-        # Rotasi agar sudut ini menjadi 0
-        c, s = np.cos(-shot_angle_field), np.sin(-shot_angle_field)
-        rotation_matrix = np.array(((c, -s), (s, c)))
+        a_unit = direction_vector / dir_norm
     
     defenders_relative = []
     for d_field in defenders_field:
-        # Vektor dari Bola
         vec = d_field - ball_field
-        # Rotasi
-        rotated = np.dot(rotation_matrix, vec)
-        # Skala ke meter
-        rotated_meters = rotated / pixels_per_meter
-        defenders_relative.append(rotated_meters)
+        d_x = np.dot(vec, a_unit) / pixels_per_meter
+        d_y = abs((vec[0]*direction_vector[1] - vec[1]*direction_vector[0])) / (dir_norm * pixels_per_meter)
+        defenders_relative.append(np.array([d_x, d_y]))
         
     print(f"Pemain Bertahan (Meter Relatif): {defenders_relative}")
     
     # Langkah 6: Menghitung Probabilitas Gol
     print("\n--- Langkah 4: Perhitungan Probabilitas Gol ---")
     
-    # Metode 1: Standar
     res_standard = gp_calc.calculate_final_probability(dist_meters, angle_rad, defenders_relative, method='standard')
     print(f"\n[Metode Standar]")
     print(f"Probabilitas Dasar: {res_standard['base_probability']:.4f}")
     print(f"Faktor Halangan: {res_standard['obstacle_factor']:.4f}")
     print(f"Probabilitas Akhir: {res_standard['final_probability']:.4f}")
     
-    # Metode 2: Nilai Eigen
-    res_eigen = gp_calc.calculate_final_probability(dist_meters, angle_rad, defenders_relative, method='eigenvalue')
-    print(f"\n[Metode Nilai Eigen]")
-    print(f"Probabilitas Dasar: {res_eigen['base_probability']:.4f}")
-    print(f"Faktor Halangan: {res_eigen['obstacle_factor']:.4f}")
-    print(f"Probabilitas Akhir: {res_eigen['final_probability']:.4f}")
+    defenders_vectors = []
+    vec_goal_m = (goal_center_field - ball_field) / pixels_per_meter
+    for d_field in defenders_field:
+        vec_def_m = (d_field - ball_field) / pixels_per_meter
+        defenders_vectors.append((vec_def_m, vec_goal_m))
+    res_wedge = gp_calc.calculate_final_probability_with_wedge(dist_meters, angle_rad, defenders_vectors, method='standard')
+    print(f"\n[Metode Wedge Product]")
+    print(f"Probabilitas Dasar: {res_wedge['base_probability']:.4f}")
+    print(f"Faktor Halangan: {res_wedge['obstacle_factor']:.4f}")
+    print(f"Probabilitas Akhir: {res_wedge['final_probability']:.4f}")
     
     # Analisis Detail
     print("\n--- Analisis Detail ---")
@@ -179,7 +167,7 @@ def main():
 
     # Langkah 7: Visualisasi & Output
     print("\n--- Langkah 5: Visualisasi ---")
-    final_prob_val = res_eigen['final_probability'] # Menggunakan hasil metode nilai eigen
+    final_prob_val = res_wedge['final_probability']
     
     # Memuat ulang gambar asli untuk menggambar pada kanvas bersih
     original_shot_img = cv2.imread(shot_img_path)

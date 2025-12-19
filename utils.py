@@ -216,23 +216,12 @@ class FieldProcessor:
         self.real_goal_width = 7.32 # meter berdasarkan regulasi FIFA
 
     def calculate_scale(self, left_post, right_post):
-        """
-        Menghitung piksel per meter berdasarkan tiang gawang.
-        """
         dist_pixels = np.linalg.norm(np.array(left_post) - np.array(right_post))
         if dist_pixels == 0:
             return 1.0
         return dist_pixels / self.real_goal_width
 
     def compute_homography(self, src_points, dst_points):
-        """
-        Menghitung matriks Homografi menggunakan SVD Manual (Singular Value Decomposition).
-        Algoritma diimplementasikan secara manual:
-        a) Sistem persamaan linier (Konstruksi Sistem Linier)
-        g) Dekomposisi matriks: SVD (Singular Value Decomposition)
-        
-        Ini menggantikan cv2.findHomography dengan pendekatan Direct Linear Transformation (DLT).
-        """
         src = np.array(src_points, dtype=np.float32)
         dst = np.array(dst_points, dtype=np.float32)
         
@@ -273,12 +262,37 @@ class FieldProcessor:
         return H
 
     def transform_points(self, points, H):
-        """
-        Transformasi daftar titik menggunakan H.
-        """
         if not points:
             return []
         pts = np.array([points], dtype=np.float32)
         dst = cv2.perspectiveTransform(pts, H)
         return dst[0]
+
+    def _cross2d(self, a, b):
+        return a[0]*b[1] - a[1]*b[0]
+
+    def _coefficients_change_of_basis(self, origin, a_point, b_point, p_point):
+        o = np.array(origin, dtype=np.float64)
+        a = np.array(a_point, dtype=np.float64) - o
+        b = np.array(b_point, dtype=np.float64) - o
+        p = np.array(p_point, dtype=np.float64) - o
+        denom = self._cross2d(a, b)
+        if abs(denom) < 1e-12:
+            raise ValueError("Basis degenerat")
+        alpha = self._cross2d(p, b) / denom
+        beta = self._cross2d(p, a) / (-denom)
+        return alpha, beta
+
+    def transform_points_affine(self, points, src_origin, src_a_point, src_b_point, dst_origin, dst_a_point, dst_b_point):
+        if not points:
+            return []
+        o_dst = np.array(dst_origin, dtype=np.float64)
+        a_dst = np.array(dst_a_point, dtype=np.float64) - o_dst
+        b_dst = np.array(dst_b_point, dtype=np.float64) - o_dst
+        out = []
+        for p in points:
+            alpha, beta = self._coefficients_change_of_basis(src_origin, src_a_point, src_b_point, p)
+            mapped = o_dst + alpha * a_dst + beta * b_dst
+            out.append(mapped)
+        return out
 

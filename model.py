@@ -137,3 +137,39 @@ class GoalProbabilityCalculator:
         
         factor = np.exp(-1.0 * effective_score)
         return factor
+
+    def _calculate_individual_scores_wedge(self, defenders_vectors):
+        scores = []
+        for vec_def, vec_goal in defenders_vectors:
+            dist_goal = np.linalg.norm(vec_goal)
+            if dist_goal == 0:
+                scores.append(0.0)
+                continue
+            d_x = np.dot(vec_def, vec_goal) / dist_goal
+            wedge_val = vec_def[0]*vec_goal[1] - vec_def[1]*vec_goal[0]
+            d_y = abs(wedge_val) / dist_goal
+            if 0 < d_x < dist_goal:
+                sigma = 0.5
+                effectiveness = np.exp(-(d_y**2) / (2 * sigma**2))
+                angle_blocked = np.arctan(0.5 / d_x)
+                score = effectiveness * (angle_blocked * 2)
+                scores.append(score)
+            else:
+                scores.append(0.0)
+        return scores
+
+    def calculate_final_probability_with_wedge(self, distance, angle, defenders_vectors, method='standard'):
+        base_prob = self.calculate_base_probability(distance, angle)
+        if not defenders_vectors:
+            obstacle_factor = 1.0
+        else:
+            scores = self._calculate_individual_scores_wedge(defenders_vectors)
+            blocking_score = sum(scores)
+            obstacle_factor = np.exp(-1.0 * blocking_score)
+        final_prob = base_prob * obstacle_factor
+        return {
+            "base_probability": base_prob,
+            "obstacle_factor": obstacle_factor,
+            "final_probability": final_prob,
+            "method": "wedge_product_ga"
+        }
