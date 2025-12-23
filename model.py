@@ -5,13 +5,14 @@ class GoalProbabilityCalculator:
         self.b_intercept = 2.0  
         self.b_distance = -0.15
         self.b_angle = 1.2
+        self.keeper_weight = 1.8
 
     def calculate_base_probability(self, distance, angle):
         logit = self.b_intercept + (self.b_distance * distance) + (self.b_angle * angle)
         prob = 1 / (1 + np.exp(-logit))
         return prob
 
-    def calculate_final_probability(self, distance, angle, defenders, method='standard'):
+    def calculate_final_probability(self, distance, angle, defenders, method='standard', roles=None):
         base_prob = self.calculate_base_probability(distance, angle)
         
         if not defenders:
@@ -20,7 +21,7 @@ class GoalProbabilityCalculator:
             if method == 'eigenvalue':
                 obstacle_factor = self._calculate_obstacle_factor_with_eigenvalue(distance, angle, defenders)
             else:
-                obstacle_factor = self._calculate_obstacle_factor(distance, angle, defenders)
+                obstacle_factor = self._calculate_obstacle_factor(distance, angle, defenders, roles)
         
         final_prob = base_prob * obstacle_factor
         return {
@@ -30,9 +31,9 @@ class GoalProbabilityCalculator:
             "method": method
         }
 
-    def _calculate_individual_scores(self, distance, defenders):
+    def _calculate_individual_scores(self, distance, defenders, roles=None):
         scores = []
-        for d in defenders:
+        for i, d in enumerate(defenders):
             d_x, d_y = d # x adalah jarak ke depan, y adalah offset lateral
             
             if 0 < d_x < distance:
@@ -42,13 +43,15 @@ class GoalProbabilityCalculator:
                 angle_blocked = np.arctan(0.5 / d_x) # asumsi lebar pemain disamakan 0.5m
                 
                 score = effectiveness * (angle_blocked * 2)
+                if roles is not None and i < len(roles) and roles[i] == 'keeper':
+                    score *= self.keeper_weight
                 scores.append(score)
             else:
                 scores.append(0.0)
         return scores
 
-    def _calculate_obstacle_factor(self, distance, angle, defenders):
-        scores = self._calculate_individual_scores(distance, defenders)
+    def _calculate_obstacle_factor(self, distance, angle, defenders, roles=None):
+        scores = self._calculate_individual_scores(distance, defenders, roles)
         blocking_score = sum(scores)
         
         factor = np.exp(-1.0 * blocking_score)
@@ -138,9 +141,9 @@ class GoalProbabilityCalculator:
         factor = np.exp(-1.0 * effective_score)
         return factor
 
-    def _calculate_individual_scores_wedge(self, defenders_vectors):
+    def _calculate_individual_scores_wedge(self, defenders_vectors, roles=None):
         scores = []
-        for vec_def, vec_goal in defenders_vectors:
+        for i, (vec_def, vec_goal) in enumerate(defenders_vectors):
             dist_goal = np.linalg.norm(vec_goal)
             if dist_goal == 0:
                 scores.append(0.0)
@@ -153,17 +156,19 @@ class GoalProbabilityCalculator:
                 effectiveness = np.exp(-(d_y**2) / (2 * sigma**2))
                 angle_blocked = np.arctan(0.5 / d_x)
                 score = effectiveness * (angle_blocked * 2)
+                if roles is not None and i < len(roles) and roles[i] == 'keeper':
+                    score *= self.keeper_weight
                 scores.append(score)
             else:
                 scores.append(0.0)
         return scores
 
-    def calculate_final_probability_with_wedge(self, distance, angle, defenders_vectors, method='standard'):
+    def calculate_final_probability_with_wedge(self, distance, angle, defenders_vectors, method='standard', roles=None):
         base_prob = self.calculate_base_probability(distance, angle)
         if not defenders_vectors:
             obstacle_factor = 1.0
         else:
-            scores = self._calculate_individual_scores_wedge(defenders_vectors)
+            scores = self._calculate_individual_scores_wedge(defenders_vectors, roles)
             blocking_score = sum(scores)
             obstacle_factor = np.exp(-1.0 * blocking_score)
         final_prob = base_prob * obstacle_factor

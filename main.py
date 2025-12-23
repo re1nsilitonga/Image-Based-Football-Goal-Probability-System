@@ -123,18 +123,27 @@ def main():
         a_unit = direction_vector / dir_norm
     
     defenders_relative = []
+    defenders_roles = []
     for d_field in defenders_field:
         vec = d_field - ball_field
         d_x = np.dot(vec, a_unit) / pixels_per_meter
         d_y = abs((vec[0]*direction_vector[1] - vec[1]*direction_vector[0])) / (dir_norm * pixels_per_meter)
         defenders_relative.append(np.array([d_x, d_y]))
+    # Bangun roles berdasarkan kecocokan koordinat di shot
+    if "Kiper" in shot_points:
+        shot_keeper = shot_points["Kiper"]
+    else:
+        shot_keeper = None
+    for p in defender_points_shot:
+        role = 'keeper' if (shot_keeper is not None and p == shot_keeper) else 'defender'
+        defenders_roles.append(role)
         
     print(f"Pemain Bertahan (Meter Relatif): {defenders_relative}")
     
     # Langkah 6: Menghitung Probabilitas Gol
     print("\n--- Langkah 4: Perhitungan Probabilitas Gol ---")
     
-    res_standard = gp_calc.calculate_final_probability(dist_meters, angle_rad, defenders_relative, method='standard')
+    res_standard = gp_calc.calculate_final_probability(dist_meters, angle_rad, defenders_relative, method='standard', roles=defenders_roles)
     print(f"\n[Metode Standar]")
     print(f"Probabilitas Dasar: {res_standard['base_probability']:.4f}")
     print(f"Faktor Halangan: {res_standard['obstacle_factor']:.4f}")
@@ -145,7 +154,7 @@ def main():
     for d_field in defenders_field:
         vec_def_m = (d_field - ball_field) / pixels_per_meter
         defenders_vectors.append((vec_def_m, vec_goal_m))
-    res_wedge = gp_calc.calculate_final_probability_with_wedge(dist_meters, angle_rad, defenders_vectors, method='standard')
+    res_wedge = gp_calc.calculate_final_probability_with_wedge(dist_meters, angle_rad, defenders_vectors, method='standard', roles=defenders_roles)
     print(f"\n[Metode Wedge Product]")
     print(f"Probabilitas Dasar: {res_wedge['base_probability']:.4f}")
     print(f"Faktor Halangan: {res_wedge['obstacle_factor']:.4f}")
