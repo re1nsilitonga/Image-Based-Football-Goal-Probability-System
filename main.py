@@ -46,13 +46,17 @@ def main():
     print("\n--- Langkah 2: Tandai Pemain Bertahan pada Gambar Tembakan ---")
     defender_points_shot = marker.mark_defenders(shot_img_path, shot_points)
     print(f"Menandai {len(defender_points_shot)} pemain bertahan.")
+    if "Kiper" in shot_points:
+        keeper_pt = shot_points["Kiper"]
+        if keeper_pt not in defender_points_shot:
+            defender_points_shot.append(keeper_pt)
+            print("Menambahkan Kiper sebagai penghalang.")
 
     # Langkah 3: Menandai gambar lapangan FIFA
     print("\n--- Langkah 3: Tandai Lapangan FIFA ---")
     print("Silakan tandai titik-titik yang sesuai pada peta 2D.")
     field_points = marker.mark_points(field_img_path, [
         "Bola", 
-        "Kiper", 
         "Tiang Kiri", 
         "Tiang Kanan"
     ])
