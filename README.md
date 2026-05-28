@@ -1,5 +1,7 @@
 # Image-Based Football Goal Probability System
 
+![Cover](output/output_5.png)
+
 Sistem untuk memperkirakan probabilitas gol sepak bola dari **satu gambar diam** situasi tembakan, tanpa memerlukan kamera tracking mahal atau sensor tambahan. Sistem ini menggunakan konsep aljabar linier dan aljabar geometri untuk merekonstruksi geometri lapangan secara metrik dari foto tunggal.
 
 ## Latar Belakang
